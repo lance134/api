@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Transaction;
 use App\Models\TransactionDetail;
 use App\Models\LaundryCategory;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
 
@@ -62,44 +63,46 @@ class AuthController extends Controller
     }
 
     public function gethis($id) {
+        Log::info('Customer ID:', ['id' => $id]);
         $temp = DB::table('transactions')
-        ->leftJoin('payments', 'transactions.Tracking_number', '=', 'payments.Tracking_number')
-        ->leftJoin('transaction_details', 'transactions.Tracking_number', '=', 'transaction_details.Tracking_number')
+        
+        ->leftJoin('payments', 'transactions.Transac_ID', '=', 'payments.Transac_ID')
+        ->leftJoin('transaction_details', 'transactions.Transac_ID', '=', 'transaction_details.Transac_ID')
         ->select(
+            'transactions.Transac_ID',
             'transactions.Tracking_number as trans_tracking_number',
             'transactions.Cust_ID',
             'transactions.Tracking_number',
             'transactions.Transac_date',
             'transactions.Transac_status',
-            'transactions.service',
-            'transactions.Pickup_datetime',
-            'transactions.Delivery_datetime',
-            'transaction_details.Tracking_number',
+            'transactions.Received_datetime',
+            'transactions.Released_datetime',
             DB::raw('COALESCE(CAST(payments.amount AS CHAR), "No Payment") as payment_amount'),
             DB::raw('COALESCE(payments.Mode_of_Payment, "No Mode of Payment") as Mode_of_Payment'),
-            DB::raw('IF(transaction_details.Tracking_number IS NULL, "Cancelled", transactions.service) as service')
+            // DB::raw('IF(transaction_details.Transac_ID IS NULL, "Cancelled", transactions.Transac_status) as service')
         )
         ->where('transactions.Cust_ID', $id)
+      
         // Exclude rows where both payments.amount and payments.Mode_of_Payment are NULL
-        ->where(function($query) {
-            $query->whereNotNull('payments.amount')
-                  ->orWhereNotNull('payments.Mode_of_Payment');
-        })
+        // ->where(function($query) {
+        //     $query->whereNotNull('payments.amount')
+        //           ->orWhereNotNull('payments.Mode_of_Payment');
+        // })
         ->groupBy(
+            'transactions.Transac_ID',
             'transactions.Cust_ID',
             'transactions.Tracking_number',
             'transactions.Transac_date',
             'transactions.Transac_status',
-            'transactions.service',
-            'transactions.Pickup_datetime',
-            'transactions.Delivery_datetime',
-            'transaction_details.Tracking_number',
+            'transactions.Received_datetime',
+            'transactions.Released_datetime',
             'trans_tracking_number',
             'payment_amount',
             'Mode_of_Payment'
         )
         ->get();
-    
+
+      
     return $temp;
     }
     
@@ -123,7 +126,7 @@ class AuthController extends Controller
         // $temp = DB::table('laundry_categorys')
         //         ->get();
 
-        return response()->json(LaundryCategory::orderBy('Per_kilograms','asc')->get(), 200);
+        return response()->json(LaundryCategory::orderBy('Price','asc')->get(), 200);
 
         // return $temp;
     }
@@ -200,51 +203,43 @@ class AuthController extends Controller
     public function display($id)
     {
         $transactions = DB::table('transactions')
-        ->join('customers', 'transactions.Cust_ID', '=', 'customers.Cust_ID')
-        ->join('transaction_details', 'transactions.Tracking_number', '=', 'transaction_details.Tracking_number')
-        // ->join('admins', 'admins.Admin_ID', '=', 'transactions.Admin_ID')
-        ->join('laundry_categorys', 'transaction_details.Categ_ID', '=', 'laundry_categorys.Categ_ID')
-        ->leftJoin('payments', 'transactions.Tracking_number', '=', 'payments.Tracking_number') // Left join the payments table
-        ->select(
-            'transactions.Tracking_number',
-            'transactions.Transac_date',
-            'transactions.Transac_status',
-            'transactions.Pickup_datetime',
-            'transactions.Delivery_datetime',
-            'transactions.service',
-            // 'transactions.Staffincharge',
-            'customers.Cust_fname', 
-            'customers.Cust_lname', 
-            // 'admins.Admin_fname',
-            // 'admins.Admin_mname',
-            // 'admins.Admin_lname',
-            DB::raw('GROUP_CONCAT(laundry_categorys.Category SEPARATOR ", ") as Category'),
-            DB::raw('SUM(transaction_details.Price) as totalprice'),
-            DB::raw('SUM(transaction_details.Qty) as totalQty'),
-            DB::raw('SUM(transaction_details.Weight) as totalWeight')
-        )
-        ->groupBy(
-            'transactions.Tracking_number',
-            'transactions.Transac_date',
-            'transactions.Transac_status',
-            'transactions.service',
-            'transactions.Pickup_datetime',
-            'transactions.Delivery_datetime',
-            // 'transactions.Staffincharge',
-            'customers.Cust_fname', 
-            'customers.Cust_lname'
-            // 'admins.Admin_fname',
-            // 'admins.Admin_mname',
-            // 'admins.Admin_lname'
-        )
-        ->where('transactions.Cust_ID', $id)
-        // Exclude rows where payments.Amount is not null
-        ->whereNull('payments.Amount')
-        ->get();
+            ->join('customers', 'transactions.Cust_ID', '=', 'customers.Cust_ID')
+            ->join('transaction_details', 'transactions.Transac_ID', '=', 'transaction_details.Transac_ID')
+            ->join('laundry_categories', 'transaction_details.Categ_ID', '=', 'laundry_categories.Categ_ID')
+            ->leftJoin('payments', 'transactions.Transac_ID', '=', 'payments.Transac_ID')
+            ->select(
+                DB::raw('GROUP_CONCAT(laundry_categories.Category SEPARATOR ", ") as Category'),
+                'customers.Cust_fname as fname',
+                'customers.Cust_lname as lname',
+                'transactions.Received_datetime as rec_date',
+                'transactions.Released_datetime as rel_date',
+                DB::raw('SUM(transaction_details.Qty) as totalQty'),
+                DB::raw('SUM(transaction_details.Weight) as totalWeight'),
+                DB::raw('SUM(transaction_details.Price) as totalprice'),
+                'transactions.Tracking_number as track_num',
+                'transactions.Transac_date as trans_date',
+                'transactions.Transac_status as trans_stat',
+                'transactions.Transac_ID as trans_ID'
+            )
+            ->where('transactions.Cust_ID', $id)
+            ->groupBy(
+                'customers.Cust_fname',
+                'customers.Cust_lname',
+                'transactions.Received_datetime',
+                'transactions.Released_datetime',
+                'transactions.Tracking_number',
+                'transactions.Transac_date',
+                'transactions.Transac_status',
+                'transactions.Transac_ID'
+            )
+            ->get();
     
-    return response()->json(['transaction' => $transactions], 200);
-    
+        return response()->json(['transaction' => $transactions]);
     }
+    
+
+
+ 
 
     public function store(Request $request)
     {
@@ -255,36 +250,33 @@ class AuthController extends Controller
             'laundry' => 'required|array',
             'laundry.*.Categ_ID' => 'required|integer',
             'laundry.*.Qty' => 'required|integer',
-            'Transac' => 'required|string'
+            'Transac_status' => 'required|string'
         ]);
     
         try {
             $transaction = new Transaction();
             // Step 1: Insert into the `transactions` table
-            $transaction->Transac_status = $validatedData['Transac']; // Get Transac_status from the object
-          
+            $transaction->Transac_status = $validatedData['Transac_status']; // Get Transac_status from the object
             $transaction->Cust_ID = $validatedData['id']; // Cust_ID
             $transaction->Admin_ID = 0; // Assuming no Admin_ID for now
             $transaction->Transac_date = now();
-            $transaction->service = 'Pending';
             $transaction->Tracking_number = $validatedData['trackingNumber']; // Tracking_number as PK
-            $transaction->pickup_datetime = now(); // Initially null
-            $transaction->delivery_datetime = now(); // Initially null
+            $transaction->Received_datetime = now(); // Initially set to now
+            $transaction->Released_datetime = now(); // Initially set to now
             
-            // $transaction->Staffincharge = 'Maria'; // Assuming this is also nullable
             $transaction->save(); // This will save the transaction and return the ID
-            
-
-            $trackingnumber = $transaction->Tracking_number;
-
+    
+            // Get the transaction ID after saving
+            $transactionId = $transaction->Transac_ID; // Use the correct property for the primary key
+    
             // Step 2: Insert each laundry item into `transaction_details` table
             foreach ($validatedData['laundry'] as $item) {
                 $detail = new TransactionDetail();
                 $detail->Categ_ID = $item['Categ_ID'];
-                $detail->Tracking_number = $trackingnumber; // Use Tracking_number as transaction ID
+                $detail->Transac_ID = $transactionId; // Use the transaction ID
                 $detail->Qty = $item['Qty'];
-                $detail->Weight = 0;
-                $detail->Price = 0; 
+                $detail->Weight = 0; // Set Weight to 0 or another appropriate value
+                $detail->Price = 0; // Set Price to 0 or another appropriate value
                 $detail->save(); // Save each transaction detail
             }
     
@@ -299,7 +291,7 @@ class AuthController extends Controller
 
     public function displayDet($id) {
         $temp = DB::table('transactions')
-            ->leftJoin('transaction_details', 'transactions.Tracking_number', '=', 'transaction_details.Tracking_number')
+            ->leftJoin('transaction_details', 'transactions.Transac_ID', '=', 'transaction_details.Transac_ID')
             ->select('transactions.*', 'transaction_details.*') // Make sure to select from the correct alias
             ->where('transactions.Tracking_number', $id)
             ->get();
@@ -407,18 +399,17 @@ class AuthController extends Controller
     public function cancelTrans(Request $request, $id){
         $transactions = DB::table('transactions')
             ->join('customers', 'transactions.Cust_ID', '=', 'customers.Cust_ID')
-            ->join('transaction_details', 'transactions.Tracking_number', '=', 'transaction_details.Tracking_number')
-            ->join('laundry_categorys', 'transaction_details.Categ_ID', '=', 'laundry_categorys.Categ_ID')
+            ->join('transaction_details', 'transactions.Transac_ID', '=', 'transaction_details.Transac_ID')
+            ->join('laundry_categories', 'transaction_details.Categ_ID', '=', 'laundry_categories.Categ_ID')
             ->select(
                 'transactions.Tracking_number',
                 'transactions.Transac_date',
                 'transactions.Transac_status',
-                'transactions.Pickup_datetime',
-                'transactions.Delivery_datetime',
-                'transactions.service',
+                'transactions.Received_datetime',
+                'transactions.Released_datetime',
                 'customers.Cust_fname', 
                 'customers.Cust_lname', 
-                DB::raw('GROUP_CONCAT(laundry_categorys.Category SEPARATOR ", ") as Category'),
+                DB::raw('GROUP_CONCAT(laundry_categories.Category SEPARATOR ", ") as Category'),
                 DB::raw('SUM(transaction_details.Price) as totalprice'),
                 DB::raw('SUM(transaction_details.Qty) as totalQty'),
                 DB::raw('SUM(transaction_details.Weight) as totalWeight')
@@ -427,16 +418,15 @@ class AuthController extends Controller
                 'transactions.Tracking_number',
                 'transactions.Transac_date',
                 'transactions.Transac_status',
-                'transactions.Pickup_datetime',
-                'transactions.Delivery_datetime',
-                'transactions.service',
+                'transactions.Received_datetime',
+                'transactions.Released_datetime',
                 'customers.Cust_fname', 
                 'customers.Cust_lname', 
             )
             ->get();
 
             Transaction::where('Tracking_number', $id)
-                ->update(['service' => 'cancel']);
+                ->update(['Transac_status' => 'cancel']);
 
         return response()->json(['transaction' => $transactions], 200);
     }
@@ -467,46 +457,42 @@ class AuthController extends Controller
 
     public function getTransId($id){
         $temp = DB::table('transaction_details')
-                ->get()
-                ->where('TransDet_ID',$id);
-        
+                ->where('TransacDet_ID',$id)
+                ->get();
+             
         return $temp;
     }
 
     public function getDetails($id){
         $temp = DB::table('transactions')
-            ->where('Tracking_number',$id)
+            ->where('Transac_ID', $id)
             ->get();
-
+    
         $transactions = [];
-
+    
         foreach($temp as $t){
             $transaction_details = DB::table('transaction_details')
-                ->join('laundry_categorys', 'transaction_details.Categ_ID','=','laundry_categorys.Categ_ID')
+                ->join('laundry_categories', 'transaction_details.Categ_ID', '=', 'laundry_categories.Categ_ID')
                 ->select(
-                    'transaction_details.Tracking_number',
+                    'transaction_details.Transac_ID',
                     'transaction_details.TransacDet_ID',
                     'transaction_details.Price as price',
-
-                    'laundry_categorys.Category',
-                    
-
+                    'laundry_categories.Category'
                 )
-
-                ->where('Tracking_number',$t->Tracking_number)
-                ->get(); 
-
+                ->where('Transac_ID', $t->Transac_ID)
+                ->get();
+    
+            $transactions[] = [
+                'Tracking_number' => $t->Tracking_number,
+                'status' => $t->Transac_status,
+                'total' => $transaction_details->sum('price'),
+                'details' => $transaction_details,
+            ];
         }
-
-        $transactions[] = [
-            'Tracking_number' => $t->Tracking_number,
-            'status' => $t->Transac_status,
-            'total' => $transaction_details->sum('price'),
-            'details' => $transaction_details,
-        ];
-        
+    
         return $transactions;
     }
+    
 
     public function signup(Request $request)
     {
@@ -571,7 +557,7 @@ class AuthController extends Controller
         try {
             // Find the proof payment using joins
             $proofPayment = DB::table('transactions')
-                ->join('payments', 'transactions.Tracking_number', '=', 'payments.Tracking_number')
+                ->join('payments', 'transactions.Transac_ID', '=', 'payments.Transac_ID')
                 ->join('proof_of_payments', 'payments.Payment_ID', '=', 'proof_of_payments.Payment_ID')
                 ->where('transactions.Tracking_number', $trackingNumber)
                 ->select('payments.*', 'proof_of_payments.*')

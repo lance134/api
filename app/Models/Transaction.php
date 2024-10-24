@@ -29,8 +29,8 @@ class Transaction extends Model
 
 
     protected $table = 'transactions';
-    protected $primaryKey = 'Tracking_number';
-    public $incrementing = false; 
+    protected $primaryKey = 'Transac_ID';
+    public $incrementing = true; 
 
     protected $fillable = [
         'Tracking_number',
@@ -38,16 +38,19 @@ class Transaction extends Model
         'Admin_ID',
         'Transac_date',
         'Transac_status',
-        'service',
-        'Pickup_datetime',
-        'Delivery_datetime',
-        'Staffincharge',
+        'Received_datetime',
+        'Released_datetime',
         'updated_at', // Usually managed by Eloquent
         'created_at'  // Usually managed by Eloquent
     ];
 
     public function details()
     {
-        return $this->hasMany(TransactionDetail::class, 'Tracking_number'); // Ensure correct foreign key
+        return $this->hasMany(TransactionDetail::class, 'Transac_ID'); // Ensure correct foreign key
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'Cust_ID');
     }
 }

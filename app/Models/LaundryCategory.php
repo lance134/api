@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class LaundryCategory extends Model
 {
     use HasFactory;
-    protected $table = "laundry_categorys";
+    protected $table = "laundry_categories";
     protected $primaryKey = "Categ_ID";
     public $incrementing = true;
     protected $keyType = "int";
@@ -16,7 +16,6 @@ class LaundryCategory extends Model
         "Categ_ID",
         "Category",
         "Price",
-        "Per_kilograms"
     ];
 
     public function transactionDetails()

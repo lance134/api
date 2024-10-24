@@ -10,16 +10,16 @@ class TransactionDetail extends Model
     use HasFactory;
 
     protected $table = 'transaction_details';
-
+    protected $primaryKey = 'TransacDet_ID';
     protected $fillable = [
         'Categ_ID',
-        'Tracking_number',
+        'Transac_ID',
         'Qty',
     ];
 
     public function transaction()
     {
-        return $this->belongsTo(Transaction::class, 'Tracking_number');
+        return $this->belongsTo(Transaction::class, 'Transac_ID');
     }
 
     public function category()
